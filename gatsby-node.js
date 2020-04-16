@@ -3,12 +3,46 @@
  *
  * See: https://www.gatsbyjs.org/docs/node-apis/
  */
-// You can delete this file if you're not using it
+const {
+  supportedExtensions,
+} = require(`gatsby-transformer-sharp/supported-extensions`)
 
-/**
- * You can uncomment the following line to verify that
- * your plugin is being loaded in your site.
- *
- * See: https://www.gatsbyjs.org/docs/creating-a-local-plugin/#developing-a-local-plugin-that-is-outside-your-project
- */
-exports.onPreInit = () => console.log("Loaded gatsby-starter-plugin")
+const probe = require(`probe-image-size`)
+const fs = require(`fs-extra`)
+
+function toArray(buf) {
+  var arr = new Array(buf.length)
+
+  for (var i = 0; i < buf.length; i++) {
+    arr[i] = buf[i]
+  }
+
+  return arr
+}
+
+const brokenImageNodes = []
+
+exports.onCreateNode = ({ node }) => {
+  if (node.internal.type !== `File` || !supportedExtensions[node.extension]) {
+    return
+  }
+
+  const dimensions = probe.sync(toArray(fs.readFileSync(node.absolutePath)))
+
+  if (!dimensions) {
+    brokenImageNodes.push(node)
+  }
+}
+
+exports.resolvableExtensions = ({ reporter }) => {
+  if (brokenImageNodes && brokenImageNodes.length) {
+    reporter.panic(
+      `gatsby-plugin-image-checker found some corrupt images:\n\n${brokenImageNodes
+        .map(
+          (node) =>
+            `Node id: ${node.id},\nAbsolute path: ${node.absolutePath}\n`
+        )
+        .join(`\n`)}`
+    )
+  }
+}
